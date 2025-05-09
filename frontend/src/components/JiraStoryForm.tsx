@@ -22,6 +22,10 @@ import Cat from '../assets/animals/Cat';
 import Dog from '../assets/animals/Dog';
 import Elephant from '../assets/animals/Elephant';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Slider from '@mui/material/Slider';
+import Switch from '@mui/material/Switch';
 
 function parseJiraSections(text: string) {
     const sections: {
@@ -74,6 +78,39 @@ function parseJiraSections(text: string) {
 // Animal avatar array
 const animalAvatars = [Cat, Dog, Elephant];
 
+const PurpleCircleSpinner: React.FC<{ size?: number }> = ({ size = 64 }) => (
+    <span style={{
+        display: 'inline-block',
+        width: size,
+        height: size,
+        position: 'relative',
+    }}>
+        {[...Array(8)].map((_, i) => (
+            <span
+                key={i}
+                style={{
+                    position: 'absolute',
+                    width: size * 0.18,
+                    height: size * 0.18,
+                    background: '#7b2ff2',
+                    borderRadius: '50%',
+                    top: size / 2 - (size * 0.09) + (size * 0.36 * Math.sin((i * Math.PI) / 4)),
+                    left: size / 2 - (size * 0.09) + (size * 0.36 * Math.cos((i * Math.PI) / 4)),
+                    opacity: 0.7,
+                    animation: 'purple-circle-spin 1.2s linear infinite',
+                    animationDelay: `${i * 0.15}s`,
+                }}
+            />
+        ))}
+        <style>{`
+            @keyframes purple-circle-spin {
+                0%, 100% { opacity: 0.7; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.3); }
+            }
+        `}</style>
+    </span>
+);
+
 const JiraStoryForm: React.FC = () => {
     const [description, setDescription] = useState('');
     const [clarification, setClarification] = useState('');
@@ -86,6 +123,8 @@ const JiraStoryForm: React.FC = () => {
     const [selectedStory, setSelectedStory] = useState<JiraStory | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [copyStatus, setCopyStatus] = useState<{[key: string]: boolean}>({});
+    const [generateStoryPoints, setGenerateStoryPoints] = useState(true);
+    const [loadingStoryPoints, setLoadingStoryPoints] = useState(false);
 
     useEffect(() => {
         const savedStories = localStorage.getItem('jiraStories');
@@ -148,15 +187,28 @@ const JiraStoryForm: React.FC = () => {
     const handleGenerate = async (desc: string) => {
         try {
             const result = await generateJiraStory(desc);
-            // Estimate story points
-            const sp = await estimateStoryPoints(result.description);
-            const storyWithPoints = { ...result, story_points: sp };
+            let storyWithPoints = result;
+            if (generateStoryPoints) {
+                // Add a temporary story with loadingStoryPoints flag
+                const tempStory = { ...result, loadingStoryPoints: true };
+                setStories([tempStory, ...stories]);
+                setLoadingStoryPoints(true);
+                const sp = await estimateStoryPoints(result.description);
+                setLoadingStoryPoints(false);
+                console.log('Story point generated:', sp);
+                storyWithPoints = { ...result, story_points: sp };
+                // Replace the temp story with the final story
+                setStories([storyWithPoints, ...stories]);
+            } else {
+                setStory(storyWithPoints);
+                setStories([storyWithPoints, ...stories]);
+            }
             setStory(storyWithPoints);
-            setStories([storyWithPoints, ...stories]); // Add new story to the top
             setStep('initial');
             setClarification('');
             setClarifyQuestion(null);
         } catch (err) {
+            setLoadingStoryPoints(false);
             setError('Failed to generate JIRA story. Please try again.');
         }
     };
@@ -213,90 +265,123 @@ const JiraStoryForm: React.FC = () => {
                     background: '#fff',
                     boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
                     mb: 4,
+                    position: 'relative',
                 }}
             >
-                <Typography
-                    variant="h3"
-                    fontWeight={700}
-                    align="center"
-                    gutterBottom
-                    sx={{
-                        background: 'linear-gradient(90deg, #7b2ff2 0%, #f357a8 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                    }}
-                >
-                    JIRA Story Generator
-                </Typography>
-                {step === 'initial' && (
-                    <form onSubmit={handleInitialSubmit}>
-                        {loading ? (
-                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 120 }}>
-                                <img
-                                    src={logo}
-                                    alt="Loading..."
-                                    style={{
-                                        height: 64,
-                                        width: 64,
-                                        animation: 'spin 1.2s linear infinite',
-                                    }}
-                                />
-                                <style>
-                                    {`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}
-                                </style>
-                            </Box>
-                        ) : (
+                <Box sx={{ width: '100%' }}>
+                    <Typography
+                        variant="h3"
+                        fontWeight={700}
+                        align="center"
+                        gutterBottom
+                        sx={{
+                            background: 'linear-gradient(90deg, #7b2ff2 0%, #f357a8 100%)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}
+                    >
+                        JIRA Story Generator
+                    </Typography>
+                    {loading && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', my: 2 }}>
+                            <PurpleCircleSpinner size={64} />
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 3, fontWeight: 500, textAlign: 'center' }}>
+                                {loadingStoryPoints ? 'Estimating Story Points...' : 'Generating JIRA Story...'}
+                            </Typography>
+                        </Box>
+                    )}
+                    {step === 'initial' && (
+                        <form onSubmit={handleInitialSubmit}>
+                            {!loading && (
+                                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                    <TextField
+                                        fullWidth
+                                        multiline
+                                        rows={4}
+                                        label="Feature Description"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        margin="normal"
+                                        required
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                (e.target as HTMLInputElement).form?.requestSubmit();
+                                            }
+                                        }}
+                                        sx={{ flex: 1, minWidth: 0 }}
+                                    />
+                                </Box>
+                            )}
+                            {!loading && (
+                                <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', mt: 2 }}>
+                                    <Button
+                                        type="submit"
+                                        variant="contained"
+                                        color="primary"
+                                        disabled={loading || !description.trim()}
+                                    >
+                                        {loading ? <CircularProgress size={24} /> : 'Generate Story'}
+                                    </Button>
+                                </Box>
+                            )}
+                        </form>
+                    )}
+                    {step === 'clarify' && clarifyQuestion && (
+                        <form onSubmit={handleClarificationSubmit}>
+                            <Alert severity="info" sx={{ mt: 2, mb: 2 }}>{clarifyQuestion}</Alert>
                             <TextField
                                 fullWidth
                                 multiline
-                                rows={4}
-                                label="Feature Description"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
+                                rows={2}
+                                label="Your Answer"
+                                value={clarification}
+                                onChange={(e) => setClarification(e.target.value)}
                                 margin="normal"
                                 required
                             />
-                        )}
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            color="primary"
-                            disabled={loading || !description.trim()}
-                            sx={{ mt: 2 }}
-                        >
-                            {loading ? <CircularProgress size={24} /> : 'Generate Story'}
-                        </Button>
-                    </form>
-                )}
-                {step === 'clarify' && clarifyQuestion && (
-                    <form onSubmit={handleClarificationSubmit}>
-                        <Alert severity="info" sx={{ mt: 2, mb: 2 }}>{clarifyQuestion}</Alert>
-                        <TextField
-                            fullWidth
-                            multiline
-                            rows={2}
-                            label="Your Answer"
-                            value={clarification}
-                            onChange={(e) => setClarification(e.target.value)}
-                            margin="normal"
-                            required
-                        />
-                        <Button
-                            type="submit"
-                            variant="contained"
-                            color="primary"
-                            disabled={loading || !clarification.trim()}
-                            sx={{ mt: 2 }}
-                        >
-                            {loading ? <CircularProgress size={24} /> : 'Submit Clarification'}
-                        </Button>
-                    </form>
-                )}
-                {error && (
-                    <Alert severity="error" sx={{ mt: 2 }}>
-                        {error}
-                    </Alert>
-                )}
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                color="primary"
+                                disabled={loading || !clarification.trim()}
+                                sx={{ mt: 2 }}
+                            >
+                                {loading ? <CircularProgress size={24} /> : 'Submit Clarification'}
+                            </Button>
+                        </form>
+                    )}
+                    {error && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
+                </Box>
+                <Box sx={{ position: 'absolute', right: 32, bottom: 32, zIndex: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Switch
+                        checked={generateStoryPoints}
+                        onChange={(e) => setGenerateStoryPoints(e.target.checked)}
+                        sx={{
+                            '& .MuiSwitch-switchBase': {
+                                '&.Mui-checked': {
+                                    color: '#fff',
+                                    '& + .MuiSwitch-track': {
+                                        backgroundColor: '#6a1bbd',
+                                    },
+                                },
+                            },
+                            '& .MuiSwitch-track': {
+                                backgroundColor: '#ccc',
+                            },
+                            '& .MuiSwitch-thumb': {
+                                backgroundColor: '#fff',
+                            },
+                        }}
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                        Story Point Generation
+                    </Typography>
+                </Box>
             </Paper>
             {/* Stories Grid */}
             {stories.length > 0 && (
@@ -339,13 +424,14 @@ const JiraStoryForm: React.FC = () => {
                                             border: idx === 0 ? '2.5px solid #FFD600' : '2px solid #f357a8',
                                             background: idx === 0 ? '#FFF9E1' : '#f3eaff',
                                         },
+                                        position: 'relative',
                                     }}
                                 >
                                     <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                                         <Avatar sx={{ bgcolor: 'primary.main', mr: 1 }}>
                                             {React.createElement(animalAvatars[idx % animalAvatars.length])}
                                         </Avatar>
-                                        <Box sx={{ flex: 1 }}>
+                                        <Box sx={{ flex: 1, pr: 5 }}>
                                             <Typography
                                                 variant="subtitle1"
                                                 fontWeight={600}
@@ -368,12 +454,43 @@ const JiraStoryForm: React.FC = () => {
                                                 {s.description}
                                             </Typography>
                                         </Box>
-                                        {s.story_points && (
-                                            <Box sx={{ ml: 1, px: 1.2, py: 0.2, bgcolor: '#FFD600', color: '#333', borderRadius: 2, fontWeight: 700, fontSize: 15, minWidth: 32, textAlign: 'center' }}>
-                                                {s.story_points.split(' ')[0]}
-                                            </Box>
-                                        )}
                                     </Box>
+                                    {generateStoryPoints && idx === 0 && (loadingStoryPoints || s.loadingStoryPoints) ? (
+                                        <Box sx={{
+                                            position: 'absolute', top: 10, right: 10,
+                                            width: 32,
+                                            height: 32,
+                                            bgcolor: '#FFD600',
+                                            color: '#333',
+                                            borderRadius: 2,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            overflow: 'hidden',
+                                        }}>
+                                            <PurpleCircleSpinner size={22} />
+                                        </Box>
+                                    ) : s.story_points && (
+                                        <Box sx={{
+                                            position: 'absolute', top: 10, right: 10,
+                                            width: 32,
+                                            height: 32,
+                                            bgcolor: '#FFD600',
+                                            color: '#333',
+                                            borderRadius: 2,
+                                            fontWeight: 700,
+                                            fontSize: 18,
+                                            minWidth: 32,
+                                            minHeight: 32,
+                                            textAlign: 'center',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            overflow: 'hidden',
+                                        }}>
+                                            {String(s.story_points).match(/\d+/)?.[0] || ''}
+                                        </Box>
+                                    )}
                                 </Paper>
                             </Box>
                         ))}
@@ -386,6 +503,44 @@ const JiraStoryForm: React.FC = () => {
                     <IconButton size="small" onClick={() => handleCopy('title', parsed?.title || selectedStory?.title)}>
                         <ContentCopyIcon fontSize="small" color={copyStatus['title'] ? 'success' : 'inherit'} />
                     </IconButton>
+                    {/* Story Points Badge */}
+                    {selectedStory?.story_points && (!loadingStoryPoints || stories[0] !== selectedStory) && (
+                        <Box sx={{
+                            ml: 2,
+                            width: 32,
+                            height: 32,
+                            bgcolor: '#FFD600',
+                            color: '#333',
+                            borderRadius: 2,
+                            fontWeight: 700,
+                            fontSize: 18,
+                            minWidth: 32,
+                            minHeight: 32,
+                            textAlign: 'center',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                        }}>
+                            {String(selectedStory.story_points).match(/\d+/)?.[0] || ''}
+                        </Box>
+                    )}
+                    {generateStoryPoints && (loadingStoryPoints || stories[0]?.loadingStoryPoints) && stories[0] === selectedStory && (
+                        <Box sx={{
+                            ml: 2,
+                            width: 32,
+                            height: 32,
+                            bgcolor: '#FFD600',
+                            color: '#333',
+                            borderRadius: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                        }}>
+                            <PurpleCircleSpinner size={22} />
+                        </Box>
+                    )}
                 </DialogTitle>
                 <DialogContent dividers sx={{ background: '#f8f6ff' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -406,11 +561,15 @@ const JiraStoryForm: React.FC = () => {
                                     <ContentCopyIcon fontSize="small" color={copyStatus['dod'] ? 'success' : 'inherit'} />
                                 </IconButton>
                             </Box>
-                            <ul>
-                                {definitionOfDone.map((item, i) => (
-                                    <li key={i}><Typography>{item}</Typography></li>
-                                ))}
-                            </ul>
+                            <ol>
+                                {definitionOfDone.flatMap((item, i) => {
+                                    // Remove leading numbers and whitespace
+                                    const splitItems = item.split(/\s*(?=\d+\.)/).map(s => s.trim()).filter(Boolean);
+                                    return splitItems.map((subItem, j) => (
+                                        <li key={`${i}-${j}`}><Typography>{subItem.replace(/^\d+\.\s*/, '')}</Typography></li>
+                                    ));
+                                })}
+                            </ol>
                             <Divider sx={{ my: 1 }} />
                         </>
                     )}

@@ -10,6 +10,7 @@ export interface JiraStory {
     definition_of_done: string[];
     additional_questions?: string[];
     story_points?: string;
+    loadingStoryPoints?: boolean;
 }
 
 export const generateJiraStory = async (description: string): Promise<JiraStory> => {

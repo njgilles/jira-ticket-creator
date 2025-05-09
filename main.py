@@ -9,7 +9,7 @@ model = OllamaLLM(model="llama3.1")
 template = """
 You are a Software Engineer who is great at writing JIRA stories.
 
-If the following prompt is clear and detailed enough, provide ONLY a JIRA story with the following sections, clearly labeled and always present (even if you must make up reasonable content):
+If the following prompt is clear and detailed enough, provide ONLY a JIRA story with the following sections, clearly labeled:
 
 **Title:** <title>
 **Description:** <description>
@@ -22,6 +22,8 @@ If the following prompt is clear and detailed enough, provide ONLY a JIRA story 
 2. <done 2>
 ...
 
+Do NOT invent or assume any specific names (e.g., database names, table names, service names) or values that are not explicitly provided in the prompt. If a name or value is needed but not given, use a generic placeholder (e.g., <database name>) or a general description.
+
 If the prompt is too short, vague, or unclear (for example, if it is just one word or lacks enough detail), respond ONLY with a single clarifying question and nothing else. Do NOT include any commentary, the word 'CLEAR', or a story if clarification is needed.
 
 Prompt: {question}
@@ -33,7 +35,17 @@ chain = prompt | model
 print('chain', chain)
 # Story point estimation prompt and chain
 sp_template = """
-You are an experienced Agile team member. Given the following JIRA story description, estimate the story points (using Fibonacci sequence: 1, 2, 3, 5, 8, 13, 21) for the story. Respond ONLY with the number and a brief rationale (one sentence).
+You are an experienced Agile team member. Given the following JIRA story description, estimate the story points using the Fibonacci sequence (1, 2, 3, 5, 8, 13, 21).
+
+- 1: Very simple, almost no effort, no unknowns.
+- 2: Simple, small, little complexity.
+- 3: Small, some complexity or minor unknowns (e.g., a few variables, simple calculations, straightforward logic, deploying one resource).
+- 5: Medium, moderate complexity or some unknowns.
+- 8: Large, high complexity, significant unknowns or dependencies.
+- 13: Very large, very complex, many unknowns, may need to be split.
+- 21: Epic, too large for a sprint, should be split.
+
+Consider effort, complexity, uncertainty, and dependencies. Respond ONLY with the number and a one-sentence rationale.
 
 Story Description:
 {description}
